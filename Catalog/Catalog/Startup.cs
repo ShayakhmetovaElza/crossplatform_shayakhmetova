@@ -1,83 +1,84 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
 using Catalog.Models;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc.Formatters;
+using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Mvc.NewtonsoftJson;
+
 
 namespace Catalog
 {
     public class Startup
-        
     {
-        public static List<Level> lev = new List<Level>();
-        public static List<Category> cat = new List<Category>();
-        public static List<Pattern> pat = new List<Pattern>();
-        public static Database database = new Database(pat, cat, lev);
-
+        public static Database database = new Database();
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
 
-            lev.Add(new Level("Easy"));
-            lev.Add(new Level("Average"));
-            lev.Add(new Level("Advanced"));
-
-            cat.Add(new Category("Temp"));
-            cat.Add(new Category("New"));
-            cat.Add(new Category("Dresses"));
-            cat.Add(new Category("Skirts"));
-            cat.Add(new Category("Blouse"));
-
-            pat.Add(new Pattern("Dresses A", 150, 0, 2));
-            pat.Add(new Pattern("Dresses B", 200, 0, 1));
-            pat.Add(new Pattern("Dresses C", 200, 2, 2));
-            pat.Add(new Pattern("Skirts A", 100, 1, 1));
-            pat.Add(new Pattern("Skirts B", 50, 0, 3));
-            pat.Add(new Pattern("Blouse A", 200, 2, 4));
         }
-
         public IConfiguration Configuration { get; }
+        private static NewtonsoftJsonPatchInputFormatter GetJsonPatchInputFormatter()
+        {
+            var builder = new ServiceCollection()
+                .AddLogging()
+                .AddMvc()
+                .AddNewtonsoftJson()
+                .Services.BuildServiceProvider();
+
+            return builder
+                .GetRequiredService<IOptions<MvcOptions>>()
+                .Value
+                .InputFormatters
+                .OfType<NewtonsoftJsonPatchInputFormatter>()
+                .First();
+        }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-          services.AddDbContext<TodoContext>(opt =>
-                opt.UseInMemoryDatabase("TodoList"));
-             services.AddControllers();
+            services.AddControllers().AddNewtonsoftJson(options => options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore);
+            services.AddDbContext<TodoContext>(opt =>
+            opt.UseInMemoryDatabase("Database"));
 
-       /*     services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                    .AddJwtBearer(options =>
-                    {
-                        options.RequireHttpsMetadata = false;
-                        options.TokenValidationParameters = new TokenValidationParameters
-                        {
-                            // укзывает, будет ли валидироваться издатель при валидации токена
-                            ValidateIssuer = true,
-                            // строка, представляющая издателя
-                            ValidIssuer = AuthOptions.ISSUER,
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters()
+                {
+                     ValidateIssuer = true,
+                     ValidIssuer = AuthOptions.ISSUER,
 
-                            // будет ли валидироваться потребитель токена
-                            ValidateAudience = true,
-                            // установка потребителя токена
-                            ValidAudience = AuthOptions.AUDIENCE,
-                            // будет ли валидироваться время существования
-                            ValidateLifetime = true,
+                     ValidateAudience = true,
+                     ValidAudience = AuthOptions.AUDIENCE,
 
-                            // установка ключа безопасности
-                            IssuerSigningKey = AuthOptions.GetSymmetricSecurityKey(),
-                            // валидация ключа безопасности
-                            ValidateIssuerSigningKey = true,
-                        };
-                    });
-            services.AddControllersWithViews();*/
+                     ValidateIssuerSigningKey = true,
+                     IssuerSigningKey = AuthOptions.SigningKey,
+
+                     ValidateLifetime = true,
+                };
+            } );
+            services.AddControllers();
+            services.AddControllersWithViews(options =>
+            {
+                options.InputFormatters.Insert(0, GetJsonPatchInputFormatter());
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -91,8 +92,9 @@ namespace Catalog
             app.UseHttpsRedirection();
 
             app.UseRouting();
-
+            app.UseAuthentication();
             app.UseAuthorization();
+
 
             app.UseEndpoints(endpoints =>
             {

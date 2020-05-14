@@ -1,0 +1,2 @@
+https://www.getpostman.com/collections/a2af8d9782653df6da9f
+- ссылка на запросы в postman

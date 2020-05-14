@@ -1,5 +1,0 @@
-Добрый день , Татьяна Михайловна. Я начала переделывать вторую работу. Я сделала, что у объекта может быть несколько категорий, т.е. List<int> CategoryIds.
-У меня не получается создать контроллер: программа ругается, что List<int> , а ему нужен List<Category>. Но тогда получается, что у каждого Pattern будет свой класс Category, т.е. будет уже не общая модель.
-Мне переделать на List<Category> и пусть пусть будет не общая модель, или оставить List<int> и уже делать OnModelCreating и добавить EntityTypeBuilder.Ignore.
-
-https://github.com/ShayakhmetovaElza/crossplatform_shayakhmetova

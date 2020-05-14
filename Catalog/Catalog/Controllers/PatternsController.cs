@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Catalog.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Catalog.Controllers
 {
@@ -21,143 +22,119 @@ namespace Catalog.Controllers
         }
 
         // GET: api/Patterns
-        //По GET: api/Patterns должен вывести вы выкройки
+        // Добавить Patterns из database
         [HttpGet]
-        public string Get()
+        [Authorize(Roles = "admin")]
+        public IEnumerable<Pattern> GetPatterns()
         {
-            string s;
+            var patterns = Startup.database.getpat();
+            foreach (var pattern in patterns)
+            {
+                _context.db_patterns.Add(pattern);
+            }
+           _context.SaveChanges();
 
-            s = "api/Patterns/All - выводит все выкройки \n\n";
 
-            s += "api/Patterns/GetPatternsL/name_lavel - выводит выкройки с уровнем сложности name_lavel\n";
-            s += "Например, уровень сложности 'Easy'\n  api/Patterns/GetPatternsL/Easy \n\n";
+            var categories = Startup.database.getcat();
+            foreach (var category in categories)
+            {
+                _context.db_categories.Add(category);
+            }
+            _context.SaveChanges();
 
-            s += "api/Patterns/GetPatternsС/name_category - выводит выкройки с категорией name_category\n";
-            s += "Например, категория 'Dresses'\n  api/Patterns/GetPatternsC/Dresses \n\n";
-
-            s += "api/Patterns/ChangeCategory/id_pattern/name_category - меняет категорию у выкройки\n";
-            s += "Например, нужно поменять выркойку с id = 1 и категорией 'New' на категорию 'Dresses'\n  api/Patterns/ChangeCategory/1/Dresses \n\n";
-
-            s += "api/Patterns/DeleteCategory/name_category - удаляет категорию по названию, но при этом у выкроек меняется категория на 'Temp'\n";
-            s += "Например, удалить категорию 'Skirts'\n  api/Patterns/DeleteCategory/Skirts \n\n";
-
-            s += "api/Patterns - выводит информацию\n";
-
-            return s;
+            return _context.GetPatterns();
         }
 
-        //Выводит все выкройки
+        // GET: api/Patterns/All
         [HttpGet("All")]
-      /*  [HttpGet]
-        [Route("All")]*/
-        public string GetAll()
+        [Authorize]
+        public IEnumerable<Pattern> GetPatternsAll()
         {
-            var res = Startup.database.GetPatterns();
-            if (res == null) return null;
-            string s="";
-            foreach(var result in res)
+            return _context.GetPatterns();
+        }
+
+        // GET: api/Patterns
+        // Вывести все выкройки по уровню сложности
+        [HttpGet("GetPatternsByLevel")]
+        [Authorize]
+        public IEnumerable<Pattern> GetPatternsByLevel(Pattern p)
+        {
+            return _context.GetPatternByLevel(p.NameLevel);
+        }
+
+        [HttpGet("GetPatternsByCategory")]
+        [Authorize]
+        public IEnumerable<Pattern> GetPatternsByCategory(Category c)
+        {
+            return _context.GetPatternByCategory(c.NameCategory);
+        }
+
+        // GET: api/Patterns/5
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Pattern>> GetPattern(int id)
+        {
+            var pattern = await _context.db_patterns.FindAsync(id);
+            if (pattern == null)
             {
-                s=s+"Pattern:"+result.Item1 + ",  Category:" + result.Item2 + ",  Level:"+result.Item3+",  Price:"+result.Item4+"\n";
+                return NotFound();
             }
-            return s;
+            return pattern;
         }
 
-        // GET: api/Patterns/GetPatternsL/Easy
-        // По GET: api/Patterns/GetPatternsL/Easy должен вывести все выкройки с уровнем сложности "Easy"
-        [HttpGet("GetPatternsL/{name_lavel}")]
-        public string GetPatternsL(string name_lavel)
+        // PUT: api/Patterns/5 
+        // To protect from overposting attacks, enable the specific properties you want to bind to, for
+        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
+        [HttpPut("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> PutPattern(int id, Pattern pattern)
         {
-            var res = Startup.database.GetPatternsFromLevel(name_lavel);
-            if (res == null) return null;
-            string s = "";
-            var p = GetAll();
-            foreach (var result in res)
+            if (id != pattern.Id)
             {
-                s = s + "Pattern:" + result.Item1 + ",  Price:" + result.Item2 + "\n";
+                return BadRequest();
             }
-            return p+"\n\n"+"NameLavel: "+name_lavel+"\n"+s;
-        }
-
-        // GET: api/Patterns/GetPatternsC/Dresses
-        // По команде GET: api/Patterns/GetPatternsC/Dresses должен вывести выкройки с категорией "Dresses"
-        [HttpGet("GetPatternsC/{name_category}")]
-        public string GetPatternsC(string name_category)
-        {
-            var res = Startup.database.GetPatternsFromCategory(name_category);
-            if (res == null) return null;
-            string s = "";
-            var p = GetAll();
-            foreach (var result in res)
+            _context.ChangePrice(id, pattern.Price); ////
+            try { await _context.SaveChangesAsync(); }
+            catch (DbUpdateConcurrencyException)
             {
-                s = s + "Pattern:" + result.Item1 + ",  Level:" + result.Item2 + ",  Price:" + result.Item3 + "\n";
+                if (!PatternExists(id)) return NotFound();
+                else throw;
             }
-            return p + "\n\n" + "NameCategory: " + name_category + "\n" + s;
-        }
-
-        // По команде GET: api/Patterns/ChangeCategory/id_pattern/name_category 
-        //должен поменять у выкройки категорию
-        [HttpGet("ChangeCategory/{id_pattern}/{name_category}")]
-        public string ChangeCategory(int id_pattern, string name_category)
-        {
-            var p = GetAll();
-            Startup.database.ChangeCategoryPattern(id_pattern, name_category);
-            var s = GetAll();
-            string pattern = Startup.database.GetNamePattern(id_pattern);
-            return p + "\n\n" + "Id: " + id_pattern + ",  Pattern: " + pattern + "\n" + s;
-        }
-
-        // По команде GET: api/Patterns/DeleteCategory/name_category должен сначала перенести все выкройки
-        //по данной категории во времененную папку, затем удалить категорию
-        [HttpGet("DeleteCategory/{name_category}")]
-        public string DeleteCategory(string name_category)
-        {
-            var p = GetAll();
-            Startup.database.DeletCategory(name_category);
-            var s = GetAll();
-            return p + "\n\n" + "Category: " + name_category + "\n" + s;
-        }
-
-        // PUT: api/Patterns/id_pattern/name_category
-        [HttpPut("{id_pattern}/{name_category}")]
-        public string ChangeCategory1(int id_pattern, string name_category)
-        {
-            var p = GetAll();
-            Startup.database.ChangeCategoryPattern(id_pattern, name_category);
-            var s = GetAll();
-            string pattern = Startup.database.GetNamePattern(id_pattern);
-            return p + "\n\n" + "Id: " + id_pattern + ",  Pattern: " + pattern + "\n" + s;
+            return NoContent();
         }
 
         // POST: api/Patterns
-        //Добавляет новую категорию и выводит список категорий с их Id
-        [HttpPost("{new_category}")]
-       public string AddCategory(string new_category)
+        // To protect from overposting attacks, enable the specific properties you want to bind to, for
+        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
+        [HttpPost]
+        [Authorize(Roles = "admin")]
+        public async Task<ActionResult<Pattern>> PostPattern(Pattern pattern)
         {
-            Startup.database.AddCategory(new_category);
-            var res = Startup.database.GetCategory();
-            string s = "";
-            foreach (var result in res)
-            {
-                s = s + "Id:" + result.Item1 + ",  Category:" + result.Item2 + "\n";
-            }
-            return s;
-        } 
-
-        // DELETE: api/Patterns/name_category
-        // По DELETE: api/Patterns/name_category должен сначала перенести все выкройки
-        //по данной категории во времененную папку, затем удалить категорию
-        [HttpDelete("{name_category}")]
-        public string DeleteCategory1(string name_category)
-        {
-            var p = GetAll();
-            Startup.database.DeletCategory(name_category);
-            var s = GetAll();
-            return p + "\n\n" + "Category: " + name_category + "\n" + s;
+            if (pattern.Id != 0) return null;
+            _context.db_patterns.Add(pattern);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction("GetPattern", new { id = pattern.Id }, pattern);
         }
 
-        private bool PatternsExists(long id)
+        // DELETE: api/Patterns/5
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<ActionResult<Pattern>> DeletePattern(int id)
         {
-            return _context.pattern1.Any(e => e.Id == id);
+            var pattern = await _context.db_patterns.FindAsync(id);
+            if (pattern == null)
+            {
+                return NotFound();
+            }
+
+            _context.db_patterns.Remove(pattern);
+            await _context.SaveChangesAsync();
+
+            return pattern;
+        }
+
+        private bool PatternExists(int id)
+        {
+            return _context.db_patterns.Any(e => e.Id == id);
         }
     }
 }
